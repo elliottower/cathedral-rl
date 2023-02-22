@@ -1,0 +1,8 @@
+repos:
+  - repo: https://github.com/elliottower/cathedral-rl
+    rev: '0.0.0'  # add version here
+    hooks:
+      - id: poetry-check
+      - id: poetry-lock
+      - id: poetry-export
+        args: ["-f", "requirements.txt", "-o", "requirements.txt"]
