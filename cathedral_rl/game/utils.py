@@ -1,10 +1,11 @@
-import time
+import os
 import subprocess
-import pygame
+import time
 
 # from https://github.com/michaelfeil/skyjo_rl/blob/dev/rlskyjo/utils.py
 from pathlib import Path
-import os
+
+import pygame
 
 
 # Refactored to just do the current directory
@@ -15,27 +16,26 @@ def get_project_root() -> Path:
     """
     return Path(__file__).parent.resolve()
 
+
 class GIFRecorder:
     """
-        This class is used to record a PyGame surface and save it to a gif file.
+    This class is used to record a PyGame surface and save it to a gif file.
     """
-    def __init__(self, out_file=f'game.gif'):
+
+    def __init__(self, out_file="game.gif"):
         """
         Initialize the recorder
         :param out_file: Output file to save the recording
         """
-        print(f'Initializing GIF Recorder...')
-        print(f'Output of the recording will be saved to {out_file}.')
+        print("Initializing GIF Recorder...")
+        print(f"Output of the recording will be saved to {out_file}.")
         self.filename_list = []
         self.frame_num = 0
         self.start_time = time.time()
         self.path = get_project_root()
-        # self.path = os.path.join(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir), os.pardir) # Root project directoy
         print(self.path)
         self.out_file = out_file
         self.ended = False
-
-
 
     def capture_frame(self, surf):
         """
@@ -46,13 +46,17 @@ class GIFRecorder:
         """
             Note: surface must have the dimensions specified in the constructor.
         """
-        if not self.ended: # Stop saving frames after we have exported the recording
+        if not self.ended:  # Stop saving frames after we have exported the recording
             # transform the pixels to the format used by open-cv
-            self.filename_list.append(os.path.join(self.path, f'temp_{time.time()}_' + str(self.frame_num) + '.png'))
+            self.filename_list.append(
+                os.path.join(
+                    self.path, f"temp_{time.time()}_" + str(self.frame_num) + ".png"
+                )
+            )
             pygame.image.save(surf, self.filename_list[-1])
             self.frame_num += 1
 
-    # Convert indivual image files to GIF
+    # Convert individual image files to GIF
     def end_recording(self, surf):
         """
         Call this method to stop recording.
@@ -65,9 +69,13 @@ class GIFRecorder:
 
             # stop recording
             duration = time.time() - self.start_time
-            seconds_per_frame = duration/ self.frame_num
+            seconds_per_frame = duration / self.frame_num
             frame_delay = str(int(seconds_per_frame * 100))
-            command_list = ['convert', '-delay', frame_delay, '-loop', '0'] + self.filename_list + [self.out_file]
+            command_list = (
+                ["convert", "-delay", frame_delay, "-loop", "0"]
+                + self.filename_list
+                + [self.out_file]
+            )
             # Use the "convert" command (part of ImageMagick) to build the animation
             subprocess.call(command_list, cwd=self.path)
             # Earlier, we saved an image file for each frame of the animation. Now

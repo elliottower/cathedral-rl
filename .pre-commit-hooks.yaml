@@ -1,0 +1,14 @@
+-   id: trailing-whitespace
+    name: Trim Trailing Whitespace
+    description: This hook trims trailing whitespace.
+    entry: trailing-whitespace-fixer
+    language: python
+    types: [text]
+
+
+#-   id: black-format
+#    name: Format with black
+#    description: Formats with black
+#    run: poetry run black 'src'
+#    entry:
+#    language: python

@@ -1,12 +1,42 @@
 from .piece import Piece
 
+
 def get_pieces(color):
     if color == 0:
-        return [Tavern1(), Tavern2(), Stable1(), Stable2(), Inn1(), Inn2(), Bridge(),
-                Square(), Manor(), Abbey(), Academy(), Infirmary(), Castle(), Tower(), Cathedral()]
+        return [
+            Tavern1(),
+            Tavern2(),
+            Stable1(),
+            Stable2(),
+            Inn1(),
+            Inn2(),
+            Bridge(),
+            Square(),
+            Manor(),
+            Abbey(),
+            Academy(),
+            Infirmary(),
+            Castle(),
+            Tower(),
+            Cathedral(),
+        ]
     elif color == 1:
-        return [Tavern1(), Tavern2(), Stable1(), Stable2(), Inn1(), Inn2(), Bridge(),
-                Square(), Manor(), AbbeyFlipped(), AcademyFlipped(), Infirmary(), Castle(), Tower()]
+        return [
+            Tavern1(),
+            Tavern2(),
+            Stable1(),
+            Stable2(),
+            Inn1(),
+            Inn2(),
+            Bridge(),
+            Square(),
+            Manor(),
+            AbbeyFlipped(),
+            AcademyFlipped(),
+            Infirmary(),
+            Castle(),
+            Tower(),
+        ]
 
 
 # Single piece
@@ -27,6 +57,7 @@ class Tavern1(Piece):
             self.rotation = degree
         return
 
+
 # Single piece
 # [x]
 class Tavern2(Piece):
@@ -45,6 +76,7 @@ class Tavern2(Piece):
         if degree in [0, 90, 180, 270]:
             self.rotation = degree
         return
+
 
 # Double piece
 # [ ]
@@ -210,7 +242,6 @@ class Abbey(Piece):
         self.rotation = 0
 
 
-
 # Z shape (flipped)
 # [ ][ ]
 #    [x][ ]
@@ -281,7 +312,6 @@ class Infirmary(Piece):
         return
 
 
-
 # U Shape
 # [ ]   [ ]
 # [ ][x][ ]
@@ -329,5 +359,12 @@ class Cathedral(Piece):
 
     def set_position(self, x, y):
         self.position = (x, y)
-        self.points = [(x, y), (x, y - 1), (x, y + 1), (x - 1, y + 1), (x + 1, y + 1), (x, y + 2)]
+        self.points = [
+            (x, y),
+            (x, y - 1),
+            (x, y + 1),
+            (x - 1, y + 1),
+            (x + 1, y + 1),
+            (x, y + 2),
+        ]
         self.rotation = 0

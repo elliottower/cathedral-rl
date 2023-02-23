@@ -63,14 +63,11 @@ If an agent successfully connects four of their tokens, they will be rewarded 1 
 * v0: Initial versions release (1.0.0)
 
 """
-import functools
-from typing import Tuple, Optional
 
 import gymnasium
-from gymnasium import spaces
 import numpy as np
 import pygame
-
+from gymnasium import spaces
 from pettingzoo import AECEnv
 from pettingzoo.utils import wrappers
 from pettingzoo.utils.agent_selector import agent_selector
@@ -106,7 +103,9 @@ class raw_env(AECEnv):
             self.clock = pygame.time.Clock
             self.WINDOW_WIDTH = 1000
             self.WINDOW_HEIGHT = 1000
-            self.window = pygame.display.set_mode((self.WINDOW_HEIGHT, self.WINDOW_HEIGHT))
+            self.window = pygame.display.set_mode(
+                (self.WINDOW_HEIGHT, self.WINDOW_HEIGHT)
+            )
             self.clock = pygame.time.Clock()
             self.WINDOW_WIDTH, self.WINDOW_HEIGHT = self.window.get_size()
 
@@ -115,14 +114,18 @@ class raw_env(AECEnv):
         self.agents = ["player_0", "player_1"]
         self.possible_agents = self.agents[:]
 
-        self.action_spaces = {i: spaces.Discrete(self.board.num_actions) for i in self.agents}
+        self.action_spaces = {
+            i: spaces.Discrete(self.board.num_actions) for i in self.agents
+        }
         self.observation_spaces = {
             i: spaces.Dict(
                 {
                     "observation": spaces.Box(
                         low=0, high=1, shape=(10, 10, 5), dtype=np.int8
                     ),
-                    "action_mask": spaces.Box(low=0, high=1, shape=(self.board.num_actions,), dtype=np.int8),
+                    "action_mask": spaces.Box(
+                        low=0, high=1, shape=(self.board.num_actions,), dtype=np.int8
+                    ),
                 }
             )
             for i in self.agents
@@ -143,7 +146,7 @@ class raw_env(AECEnv):
     #        [1, 1, 2, 1, 0, 1, 0]], dtype=int8)
     def observe(self, agent):
         board_vals = self.board.squares.reshape(10, 10)
-        board_territory = self.board.territory.reshape(10,10)
+        board_territory = self.board.territory.reshape(10, 10)
         cur_player = self.possible_agents.index(agent)
         opp_player = (cur_player + 1) % 2
 
@@ -153,7 +156,13 @@ class raw_env(AECEnv):
         cur_p_territory = np.equal(board_territory, cur_player + 1)
         opp_p_territory = np.equal(board_territory, opp_player + 1)
 
-        layers = [cur_p_board, opp_p_board, cathedral_board, cur_p_territory, opp_p_territory]
+        layers = [
+            cur_p_board,
+            opp_p_board,
+            cathedral_board,
+            cur_p_territory,
+            opp_p_territory,
+        ]
 
         observation = np.stack(layers, axis=2).astype(np.int8)
         legal_moves = self._legal_moves(agent) if agent == self.agent_selection else []
@@ -248,8 +257,8 @@ class raw_env(AECEnv):
     def render(self):
         if self.render_mode is None:
             gymnasium.logger.warn(
-                        "You are calling render method without specifying any render mode."
-                    )
+                "You are calling render method without specifying any render mode."
+            )
             return
 
         elif self.render_mode == "human":
@@ -258,34 +267,65 @@ class raw_env(AECEnv):
             # Only render if there is something to render
             block_size = int(self.WINDOW_WIDTH / 10)  # Set the size of the grid block
             border_color = (0, 0, 0)
-            self.colors = {0: (211, 211, 211), 1: (221,186,151), 2: (120, 65, 65), 3: (128, 128, 162), 4: (238,221,203), 5: (188,160,160), 6: (0, 0, 0), 7: (233,210,187), 8: (208,189,189), 9: (172,172,195) } # old cathedral preview color (192,221,208)
+            self.colors = {
+                0: (211, 211, 211),
+                1: (221, 186, 151),
+                2: (120, 65, 65),
+                3: (128, 128, 162),
+                4: (238, 221, 203),
+                5: (188, 160, 160),
+                6: (0, 0, 0),
+                7: (233, 210, 187),
+                8: (208, 189, 189),
+                9: (172, 172, 195),
+            }  # old cathedral preview color (192,221,208)
 
             for x, x_screen in enumerate(range(0, self.WINDOW_WIDTH, block_size)):
                 for y, y_screen in enumerate(range(0, self.WINDOW_HEIGHT, block_size)):
                     # If space is empty and in a player's territory, color it to mark that it is territory
-                    if self.board.territory.reshape(10,10)[x,y] > 0 and self.board.squares.reshape(10, 10)[x, y] == 0:
-                        color = self.colors[self.board.territory.reshape(10, 10)[x, y] + 3]
+                    if (
+                        self.board.territory.reshape(10, 10)[x, y] > 0
+                        and self.board.squares.reshape(10, 10)[x, y] == 0
+                    ):
+                        color = self.colors[
+                            self.board.territory.reshape(10, 10)[x, y] + 3
+                        ]
                     else:
-                        color = self.colors[self.board.squares.reshape(10,10)[x, y]]
+                        color = self.colors[self.board.squares.reshape(10, 10)[x, y]]
 
                     if color == self.colors[0]:
                         border = False
                     else:
                         border = True
 
-                    def draw_square(surface, x, y, width, height, color, border_color, border):
+                    def draw_square(
+                        surface, x, y, width, height, color, border_color, border
+                    ):
                         pygame.draw.rect(surface, color, (x, y, width, height), 0)
                         if border:
-                            pygame.draw.rect(surface, border_color, (x, y, width, height), 2)
+                            pygame.draw.rect(
+                                surface, border_color, (x, y, width, height), 2
+                            )
                         else:
-                            pygame.draw.rect(surface, border_color, (x, y, width, height), 1)
+                            pygame.draw.rect(
+                                surface, border_color, (x, y, width, height), 1
+                            )
 
-                    draw_square(self.window, x_screen, y_screen, block_size, block_size, color, border_color, border)
+                    draw_square(
+                        self.window,
+                        x_screen,
+                        y_screen,
+                        block_size,
+                        block_size,
+                        color,
+                        border_color,
+                        border,
+                    )
 
             pygame.display.update()
         elif self.render_mode == "text":
-            print("Board: \n", self.board.squares.reshape(10,10))
-            print("Territory: \n", self.board.territory.reshape(10,10))
+            print("Board: \n", self.board.squares.reshape(10, 10))
+            print("Territory: \n", self.board.territory.reshape(10, 10))
 
     def close(self):
         if self.render_mode == "human":

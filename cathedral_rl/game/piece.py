@@ -1,9 +1,11 @@
 import numpy as np
 
+
 class Piece:
     """
     Base class for Cathedral pieces, with functions to rotate and flip pieces
     """
+
     def __init__(self):
         self.rotation_matrix = np.array([(0, -1), (1, 0)])
         self.rotation_matrix_ccw = np.array([(0, 1), (-1, 0)])

@@ -1,21 +1,26 @@
+import argparse
+
 import numpy as np
 
 from cathedral_rl import cathedral_v0
 from cathedral_rl.game.manual_policy import ManualPolicy
 
-import argparse
 
 def get_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--render-mode", type=str, default="human", choices=["human", "rgb_array", "text", "text_full"],
-                        help="Choose the rendering mode for the game."
+        "--render-mode",
+        type=str,
+        default="human",
+        choices=["human", "rgb_array", "text", "text_full"],
+        help="Choose the rendering mode for the game.",
     )
 
     parser.add_argument(
         "--seed", type=int, default=None, help="random seed for board and policy"
     )
     return parser
+
 
 def get_args() -> argparse.Namespace:
     parser = get_parser()
@@ -42,7 +47,10 @@ if __name__ == "__main__":
         observation, reward, termination, truncation, info = env.last()
         mask = observation["action_mask"]
 
-        print(f"\nTurn: {iter} | Player: {agent}, Number of legal moves: ", np.count_nonzero(mask))
+        print(
+            f"\nTurn: {iter} | Player: {agent}, Number of legal moves: ",
+            np.count_nonzero(mask),
+        )
 
         if termination or truncation:
             print("Terminated") if termination else print("Truncated")
@@ -50,7 +58,10 @@ if __name__ == "__main__":
             for agent in env.possible_agents:
                 print(f"\n{agent} Final reward: ", env.unwrapped.rewards[agent])
                 print(f"{agent} Final score: ", env.unwrapped.score[agent])
-                print(f"{agent} Final pieces left over: ", [p.name for p in env.unwrapped.final_pieces[agent]])
+                print(
+                    f"{agent} Final pieces left over: ",
+                    [p.name for p in env.unwrapped.final_pieces[agent]],
+                )
             env.step(None)
             break
 
@@ -61,7 +72,9 @@ if __name__ == "__main__":
 
         env.step(action)
 
-        print(f"Turn: {iter} | Action: {action}, Piece: {env.unwrapped.board.action_to_piece_map(action)[0]}, "
-              f"Position: {env.unwrapped.board.action_to_pos_rotation_mapp(agent, action)[0]} Remaining pieces: {env.unwrapped.board.unplaced_pieces[agent]}")
+        print(
+            f"Turn: {iter} | Action: {action}, Piece: {env.unwrapped.board.action_to_piece_map(action)[0]}, "
+            f"Position: {env.unwrapped.board.action_to_pos_rotation_mapp(agent, action)[0]} Remaining pieces: {env.unwrapped.board.unplaced_pieces[agent]}"
+        )
 
         iter += 1
