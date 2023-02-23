@@ -29,9 +29,12 @@ class Board:
             for piece in range(len(self.pieces["player_0"]))
         ]
         self.num_pieces = len(self.piece_names)
+        self.total_piece_squares = sum(
+            [piece.size for piece in self.pieces[self.possible_agents[1]]]
+        )
         self.CATHEDRAL_INDEX = self.num_pieces - 1
 
-        # Keep track of which pieces are played
+        # Keep track of which pieces are played (includes cathedral for player_0)
         self.unplaced_pieces = {
             agent: list(np.arange(len(self.pieces[agent])))
             for agent in self.possible_agents
@@ -54,11 +57,17 @@ class Board:
                 self.reverse_actions[agent],
             ) = self.calculate_possible_actions(agent)
 
+        # Get the total number of actions involving a given piece, using the pre-calculated points dict
         self.num_actions_per_piece = [
             len(self.points["player_0"][piece])
             for piece in self.points["player_0"].keys()
         ]
-        self.num_actions = np.sum(self.num_actions_per_piece)
+        # Calculates indices for each piece (for action to piece mapping). Shape: [num_pieces,]
+        self.piece_indices = [
+            sum(self.num_actions_per_piece[:i])
+            for i in range(1, len(self.num_actions_per_piece))
+        ]
+        self.num_actions = sum(self.num_actions_per_piece)
 
     def calculate_possible_actions(self, agent):
         points = {}
@@ -109,6 +118,9 @@ class Board:
         return points, positions, rotations, np.array(reverse_actions)
 
     def check_territory(self, agent):
+        self.previous_territory = self.territory.copy()
+        piece_removed_size = 0
+
         # Check if this move creates territory and results in an opponent's piece being removed
         opponent = self.possible_agents[1 - self.possible_agents.index(agent)]
         squares_real = self.squares.copy()
@@ -126,10 +138,10 @@ class Board:
             for coord in piece.points:
                 self.squares.reshape(10, 10)[coord[0], coord[1]] = 0
 
-            territory = self.get_territory()
+            self.get_territory()
             agent_number = self.possible_agents.index(agent) + 1
 
-            if territory.max() > 0:
+            if self.territory.max() > 0:
                 agent_territory = np.array(
                     np.where(self.territory.reshape(10, 10) == agent_number)
                 ).T
@@ -140,13 +152,19 @@ class Board:
                 if len(set(piece.points).intersection(agent_territory)) > 0:
                     self.squares = squares_real.copy()  # Reset squares
 
+                    # Get the size of the piece to be removed
+                    piece_removed_size = piece.size
                     # Remove this piece fully (mark as unplaced, reset pos/rotation)
                     self.remove(piece_agent, piece_idx)
                     # Update the real squares to reflect this piece being removed
                     squares_real = self.squares.copy()
 
             self.squares = squares_real  # Reset the squares to the correct state (potentially with the piece removed)
-        self.get_territory()  # Recalculate territory with the proper pieces
+        territory_claimed = (
+            self.get_territory()
+        )  # Recalculate territory with the proper pieces
+
+        return territory_claimed, piece_removed_size
 
     def get_territory(self):
         # Reset illegal territory from previous calculations
@@ -162,7 +180,10 @@ class Board:
             empty_space_seed = next(iter(self.empty_spaces))
             self.remove_empty_spaces(empty_space_seed)
 
-        return self.territory
+        territory_claimed = len(self.territory[self.territory > 0]) - len(
+            self.previous_territory[self.previous_territory > 0]
+        )
+        return territory_claimed
 
     def remove_empty_spaces(self, coordinates):
         queue = [coordinates]
@@ -267,21 +288,13 @@ class Board:
 
     # Maps an action to its corresponding piece
     def action_to_piece_map(self, action):
-        # Initial legal moves list is all ones
-        legal_moves = np.arange(self.num_actions)
+        # Bin the action according to number of possible actions for each piece (e.g., first 100 actions are piece 0)
+        piece = np.digitize(action, self.piece_indices)
 
-        # Split [num_actions,] legal_moves arr into sub arrays per piece (e.g., 100 possible moves for single piece)
-        indices = [
-            sum(self.num_actions_per_piece[:i])
-            for i in range(1, len(self.num_actions_per_piece))
-        ]
-        legal_moves_split = np.split(legal_moves, indices)
+        # Get the position of the action in the bin (e.g., action 199 is position 99 in bin 1)
+        action_num = action - self.piece_indices[piece - 1] if piece > 0 else action
 
-        for i in range(len(legal_moves_split)):
-            if action in legal_moves_split[i]:
-                piece = i
-                action_num = np.where(legal_moves_split[i] == action)[0][0]
-                return piece, action_num
+        return piece, action_num
 
     # Helper function for debugging
     def action_to_pos_rotation_mapp(self, agent, action):
@@ -356,7 +369,7 @@ class Board:
                 self.squares.reshape(10, 10)[coord[0], coord[1]] = 1
             elif self.possible_agents.index(agent) == 1:
                 self.squares.reshape(10, 10)[coord[0], coord[1]] = 2
-        return
+        return piece.size
 
     def preview_turn(self, agent, action):
         piece_idx, action_num = self.action_to_piece_map(action)
@@ -404,22 +417,28 @@ class Board:
     # 0 -- agent 0 wins
     # 1 -- agent 1 wins
     def check_for_winner(self):
-        winner = -1
-        score = {agent: 0 for agent in self.possible_agents}
-        pieces_remaining = {agent: [] for agent in self.possible_agents}
-        for agent in self.possible_agents:
-            for piece_idx in self.unplaced_pieces[agent]:
-                score[agent] += self.pieces[agent][piece_idx].size
-                pieces_remaining[agent].append(self.pieces[agent][piece_idx])
+        pieces_remaining, piece_score = self.get_score()
 
         # Lowest total size of remaining pieces wins
-        if score[self.possible_agents[0]] < score[self.possible_agents[1]]:
+        if piece_score[self.possible_agents[0]] < piece_score[self.possible_agents[1]]:
             winner = 0
-        elif score[self.possible_agents[0]] > score[self.possible_agents[1]]:
+        elif (
+            piece_score[self.possible_agents[0]] > piece_score[self.possible_agents[1]]
+        ):
             winner = 1
         else:
             winner = -1
-        return winner, pieces_remaining, score
+        return winner, pieces_remaining, piece_score
+
+    # Returns list of pieces remaining and total number of points occupied by those pieces (piece score)
+    def get_score(self):
+        piece_score = {agent: 0 for agent in self.possible_agents}
+        pieces_remaining = {agent: [] for agent in self.possible_agents}
+        for agent in self.possible_agents:
+            for piece_idx in self.unplaced_pieces[agent]:
+                piece_score[agent] += self.pieces[agent][piece_idx].size
+                pieces_remaining[agent].append(self.pieces[agent][piece_idx])
+        return pieces_remaining, piece_score
 
     def __str__(self):
         return str(self.squares.reshape(10, 10).T)  # Lines up with pygame rendering

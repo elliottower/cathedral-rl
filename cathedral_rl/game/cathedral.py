@@ -63,6 +63,7 @@ If an agent successfully connects four of their tokens, they will be rewarded 1 
 * v0: Initial versions release (1.0.0)
 
 """
+import functools
 
 import gymnasium
 import numpy as np
@@ -165,7 +166,12 @@ class raw_env(AECEnv):
         ]
 
         observation = np.stack(layers, axis=2).astype(np.int8)
-        legal_moves = self._legal_moves(agent) if agent == self.agent_selection else []
+
+        # If this is the first observation, calculate legal moves, otherwise this is done every step
+        if len(self.legal_moves[agent]) == 0:
+            self._calculate_legal_moves(agent)
+
+        legal_moves = self.legal_moves[agent] if agent == self.agent_selection else []
 
         action_mask = np.zeros(self.action_space(agent).n, dtype=np.int8)
         for i in range(self.action_space(agent).n):
@@ -174,22 +180,99 @@ class raw_env(AECEnv):
 
         return {"observation": observation, "action_mask": action_mask}
 
+    # this cache ensures that same space object is returned for the same agent
+    # allows action space seeding to work as expected
+    @functools.lru_cache(maxsize=None)
     def observation_space(self, agent):
         return self.observation_spaces[agent]
 
+    @functools.lru_cache(maxsize=None)
     def action_space(self, agent):
         return self.action_spaces[agent]
 
-    def _legal_moves(self, agent):
+    # Calculate the number of legal moves per agent, legal moves per piece, and legal pieces to be played
+    def _calculate_legal_moves(self, agent):
         legal_moves = []
-        for i in range(self.board.num_actions):
-            if self.board.is_legal(agent, i):
-                legal_moves.append(i)
+        self.legal_moves_per_piece[agent] = np.zeros(self.board.num_pieces)
 
-        return legal_moves
+        for act in range(self.board.num_actions):
+            if self.board.is_legal(agent, act):
+                legal_moves.append(act)
+                self.legal_moves_per_piece[agent][
+                    self.board.action_to_piece_map(act)[0]
+                ] += 1
+        self.legal_pieces[agent] = self.legal_moves_per_piece[agent].nonzero()[0]
+        self.legal_moves[agent] = legal_moves
 
+    # Calculate rewards for a given step: score of piece placed + amount of territory claimed + size of piece removed
+    # Score of a piece placed: size of piece - size of largest legally playable piece remaining
+    # This penalizes playing small pieces when there are larger pieces available to place, rewards claiming territory
+    def _calculate_rewards(
+        self, piece_size: int, territory_claimed: int, piece_removed_size: int
+    ):
+        # Piece score: number of potential squares lost by move (zero if a piece of the largest size possible is played)
+        legal_piece_sizes = [
+            self.board.pieces[self.agent_selection][piece].size
+            for piece in self.legal_pieces[self.agent_selection]
+        ]
+        piece_score = piece_size - np.amax(legal_piece_sizes)
+
+        self.rewards[self.agent_selection] = piece_score + territory_claimed
+        if piece_removed_size != 0:
+            self.rewards[self.agent_selection] += piece_removed_size
+            self.rewards[self.agents[1 - self.agents.index(self.agent_selection)]] = (
+                -1 * piece_removed_size
+            )
+
+    # Calculate score heuristic: squares/turn + difference between total squares remaining + difference in territory
+    # Score will be positive if agent has placed more large pieces, or claimed more territory
+    def _calculate_score(self):
+        _, score = self.board.get_score()
+
+        # Difference between average size of pieces placed per turn: agent avg size per turn - opponent avg size per turn
+        # Positive if agent has placed larger pieces per turn on average
+        if self.turns[self.agents[0]] != 0:
+            avg_agent_0 = (
+                self.board.total_piece_squares - score[self.agents[0]]
+            ) / self.turns[self.agents[0]]
+            avg_agent_1 = (
+                self.board.total_piece_squares - score[self.agents[1]]
+            ) / self.turns[self.agents[1]]
+            # self.score[self.agents[0]]["squares_per_turn"] = avg_agent_0 - avg_agent_1
+            # self.score[self.agents[1]]["squares_per_turn"] = avg_agent_1 - avg_agent_0
+            self.score[self.agents[0]]["squares_per_turn"] = avg_agent_0
+            self.score[self.agents[1]]["squares_per_turn"] = avg_agent_1
+
+        # Difference between number of total squares remaining (opponent squares remaining - agent squares remaining)
+        # Positive if the opponent has more total squares remaining (penalizes pieces being captured)
+        self.score[self.agents[0]]["remaining_pieces"] = (
+            score[self.agents[1]] - score[self.agents[0]]
+        )
+        self.score[self.agents[1]]["remaining_pieces"] = (
+            score[self.agents[0]] - score[self.agents[1]]
+        )
+
+        # Difference in territory (agent's total territory - opponent's total territory)
+        # Positive if the opponent has less total territory claimed
+        territory = self.board.territory
+        self.score[self.agents[0]]["territory"] = len(territory[territory == 1]) - len(
+            territory[territory == 2]
+        )
+        self.score[self.agents[1]]["territory"] = len(territory[territory == 2]) - len(
+            territory[territory == 1]
+        )
+
+        for i in range(2):
+            self.score[self.agents[i]]["total"] = (
+                self.score[self.agents[i]]["squares_per_turn"]
+                + self.score[self.agents[i]]["remaining_pieces"]
+                + self.score[self.agents[i]]["territory"]
+            )
+
+    # Calculate winner at the end of game
     def _calculate_winner(self):
-        winner, pieces_remaining, score = self.board.check_for_winner()
+        winner, pieces_remaining, piece_score = self.board.check_for_winner()
+        self._calculate_score()
         if winner == 0:
             self.rewards[self.agents[0]] = 1
             self.rewards[self.agents[1]] = -1
@@ -201,8 +284,8 @@ class raw_env(AECEnv):
             self.rewards[self.agents[1]] = 0
 
         self.winner = winner
-        self.score = score
         self.final_pieces = pieces_remaining
+        self.piece_score = piece_score
         self.terminations = {i: True for i in self.agents}
 
     def step(self, action):
@@ -212,24 +295,46 @@ class raw_env(AECEnv):
         ):
             return self._was_dead_step(action)
 
-        # check that it is a valid move
+        # Check that it is a valid move
         if not self.board.is_legal(self.agent_selection, action):
             raise Exception("played illegal move.")
 
-        self.board.play_turn(self.agent_selection, action)
-        self.board.check_territory(self.agent_selection)
+        # Play the turn
+        piece_size = self.board.play_turn(self.agent_selection, action)
+        territory_claimed, piece_removed_size = self.board.check_territory(
+            self.agent_selection
+        )
+
+        # Don't count placing the cathedral as a turn (only count placing regular pieces)
+        if piece_size != 6:
+            self.turns[self.agent_selection] += 1
+
+        self._calculate_rewards(
+            piece_size, territory_claimed, piece_removed_size
+        )  # Heuristic reward for current move
+        self._accumulate_rewards()
+
+        # Calculate score heuristics every other turn (when both agents have placed the same number of pieces)
+        if self.turns[self.agents[0]] == self.turns[self.agents[1]]:
+            self._calculate_score()
 
         next_agent = self._agent_selector.next()
 
-        # Only switch agents if the next agent has legal moves
-        # Otherwise, the current agent keeps placing pieces
-        if len(self._legal_moves(next_agent)) != 0:
+        # If the next agent has legal moves to play, switch agents
+        self._calculate_legal_moves(next_agent)
+        if len(self.legal_moves[next_agent]) != 0:
             self.agent_selection = next_agent
 
-        elif len(self._legal_moves(self.agent_selection)) == 0:
+        # If both agents have zero moves left (game over), calculate winners
+        elif len(self.legal_moves[self.agent_selection]) == 0:
             self._calculate_winner()
+            self._calculate_score()  # Calculate score heuristics (even if one agent has played more turns)
 
-        self._accumulate_rewards()
+        # If the next agent has no legal moves left, current agent continues placing pieces
+        else:
+            self._calculate_legal_moves(self.agent_selection)
+            if len(self.legal_moves[self.agent_selection]) == 0:
+                self.terminations[self.agent_selection] = True
 
         if self.render_mode == "human":
             self.render()
@@ -245,14 +350,36 @@ class raw_env(AECEnv):
         self.truncations = {i: False for i in self.agents}
         self.infos = {i: {} for i in self.agents}
 
-        # Additional info about game outcome
-        self.winner = -1
-        self.score = {agent: 0 for agent in self.agents}
-        self.final_pieces = {agent: [] for agent in self.agents}
-
         self._agent_selector = agent_selector(self.agents)
 
         self.agent_selection = self._agent_selector.reset()
+
+        # Track the number of turns each agent has been able to play so far
+        self.turns = {agent: 0 for agent in self.agents}
+
+        # Track the total number of legal moves per agent, legal moves per piece, and legal pieces to play
+        self.legal_moves = {agent: [] for agent in self.agents}
+        self.legal_moves_per_piece = {
+            agent: np.zeros(self.board.num_pieces) for agent in self.agents
+        }
+        self.legal_pieces = {agent: [] for agent in self.agents}
+
+        # Additional info about game outcome
+        self.winner = -1
+        self.score = {
+            name: {
+                "squares_per_turn": 0,
+                "remaining_pieces": 0,
+                "territory": 0,
+                "total": 0,
+            }
+            for name in self.agents
+        }
+        self.final_pieces = {name: [] for name in self.agents}
+
+        # Additional heuristics for how well an agent is doing
+        self._score = {name: 0 for name in self.agents}
+        self._piece_score = {name: 0 for name in self.agents}
 
     def render(self):
         if self.render_mode is None:

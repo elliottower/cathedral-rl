@@ -30,7 +30,7 @@ def get_args() -> argparse.Namespace:
 if __name__ == "__main__":
     args = get_args()
 
-    env = cathedral_v0.env(render_mode=args.render_mode)
+    env = cathedral_v0.env(render_mode=args.render_mode).unwrapped
 
     env.reset(args.seed)
     env.render()
@@ -42,28 +42,36 @@ if __name__ == "__main__":
 
     manual_policy = ManualPolicy(env)
     manual_policy.agent = "player_1"
+    manual_policy.agent = None
 
     for agent in env.agent_iter():
         observation, reward, termination, truncation, info = env.last()
         mask = observation["action_mask"]
 
-        print(
-            f"\nTurn: {iter} | Player: {agent}, Number of legal moves: ",
-            np.count_nonzero(mask),
-        )
-
         if termination or truncation:
             print("Terminated") if termination else print("Truncated")
-            print("\nWINNER: ", env.unwrapped.winner)
+            print("\nWINNER: ", env.winner)
             for agent in env.possible_agents:
-                print(f"\n{agent} Final reward: ", env.unwrapped.rewards[agent])
-                print(f"{agent} Final score: ", env.unwrapped.score[agent])
+                print(f"\n{agent} Final reward: {env.rewards[agent]}")
+                print(f"{agent} Cumulative reward: {env._cumulative_rewards[agent]}")
                 print(
-                    f"{agent} Final pieces left over: ",
-                    [p.name for p in env.unwrapped.final_pieces[agent]],
+                    f"{agent} Final remaining pieces: {[p.name for p in env.final_pieces[agent]]}"
+                )
+                print(
+                    f"{agent} Score: {env.score[agent]['total']:0.2f}, "
+                    f"Squares/turn: {env.score[agent]['squares_per_turn']:0.2f}, "
+                    f"Remaining pieces difference: {env.score[agent]['remaining_pieces']}, "
+                    f"Territory difference: {env.score[agent]['territory']}"
                 )
             env.step(None)
             break
+
+        print(
+            f"\nTurn: {iter} | ({agent}) "
+            f"Legal pieces : {list(env.legal_pieces[agent])}, "
+            f"Legal moves total: {np.count_nonzero(mask)}, "
+            f"Remaining pieces: {env.board.unplaced_pieces[agent]}"
+        )
 
         if agent == manual_policy.agent:
             action = manual_policy(observation, agent)
@@ -73,8 +81,23 @@ if __name__ == "__main__":
         env.step(action)
 
         print(
-            f"Turn: {iter} | Action: {action}, Piece: {env.unwrapped.board.action_to_piece_map(action)[0]}, "
-            f"Position: {env.unwrapped.board.action_to_pos_rotation_mapp(agent, action)[0]} Remaining pieces: {env.unwrapped.board.unplaced_pieces[agent]}"
+            f"Turn: {iter} | "
+            f"Action: {action}, "
+            f"Piece: {env.board.action_to_piece_map(action)[0]}, "
+            f"Position: {env.board.action_to_pos_rotation_mapp(agent, action)[0]}, "
         )
+        print(
+            f"Turn: {iter} | Reward: {env.rewards[agent]}, "
+            f"Cumulative reward: {env._cumulative_rewards[agent]}, "
+        )
+        if env.turns["player_0"] == env.turns["player_1"]:
+            print()
+            for agent in env.agents:
+                print(
+                    f"SCORE ({agent}): {env.score[agent]['total']:0.2f}, "
+                    f"Squares/turn: {env.score[agent]['squares_per_turn']:0.2f}, "
+                    f"Remaining pieces difference: {env.score[agent]['remaining_pieces']}, "
+                    f"Territory difference: {env.score[agent]['territory']}"
+                )
 
         iter += 1
