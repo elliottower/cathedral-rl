@@ -64,6 +64,7 @@ If an agent successfully connects four of their tokens, they will be rewarded 1 
 
 """
 import functools
+from typing import Optional
 
 import gymnasium
 import numpy as np
@@ -76,8 +77,12 @@ from pettingzoo.utils.agent_selector import agent_selector
 from .board import Board
 
 
-def env(render_mode=None):
-    env = raw_env(render_mode=render_mode)
+def env(render_mode=None, per_move_rewards=False, final_reward_score_difference=False):
+    env = raw_env(
+        render_mode=render_mode,
+        per_move_rewards=per_move_rewards,
+        final_reward_score_difference=final_reward_score_difference,
+    )
     env = wrappers.TerminateIllegalWrapper(env, illegal_reward=-1)
     env = wrappers.AssertOutOfBoundsWrapper(env)
     env = wrappers.OrderEnforcingWrapper(env)
@@ -93,10 +98,23 @@ class raw_env(AECEnv):
         "has_manual_policy": True,
     }
 
-    def __init__(self, render_mode=None):
+    def __init__(
+        self,
+        render_mode=None,
+        per_move_rewards: Optional[bool] = False,
+        final_reward_score_difference: Optional[bool] = False,
+    ):
+
         super().__init__()
         self.screen = None
         self.render_mode = render_mode
+
+        # Enable to set per-move rewards as heuristic score of how good a move is (used by simple greedy agent)
+        self.per_move_rewards = per_move_rewards
+
+        # Enable to change final score returns from {-1, 1} to return the score difference for each agent
+        # Useful for testing score-based vs winrate-based optimization (
+        self.final_reward_score_difference = final_reward_score_difference
 
         # Pygame setup
         if render_mode == "human":
@@ -272,27 +290,33 @@ class raw_env(AECEnv):
     # Calculate winner at the end of game
     def _calculate_winner(self):
         winner, pieces_remaining, piece_score = self.board.check_for_winner()
-        self._calculate_score()
-        if winner == 0:
-            self.rewards[self.agents[0]] = 1
-            self.rewards[self.agents[1]] = -1
-        elif winner == 1:
-            self.rewards[self.agents[0]] = -1
-            self.rewards[self.agents[1]] = 1
+        if self.final_reward_score_difference:
+            self._calculate_score()
+            # self.rewards[self.agents[0]] =
+            # self.score["remaining_pieces"]
         else:
-            self.rewards[self.agents[0]] = 0
-            self.rewards[self.agents[1]] = 0
+            if winner == 0:
+                self.rewards[self.agents[0]] = 1
+                self.rewards[self.agents[1]] = -1
+            elif winner == 1:
+                self.rewards[self.agents[0]] = -1
+                self.rewards[self.agents[1]] = 1
+            else:
+                self.rewards[self.agents[0]] = 0
+                self.rewards[self.agents[1]] = 0
 
         self.winner = winner
         self.final_pieces = pieces_remaining
         self.piece_score = piece_score
         self.terminations = {i: True for i in self.agents}
+        self.agents = []
 
     def step(self, action):
         if (
             self.truncations[self.agent_selection]
             or self.terminations[self.agent_selection]
         ):
+
             return self._was_dead_step(action)
 
         # Check that it is a valid move
@@ -309,9 +333,10 @@ class raw_env(AECEnv):
         if piece_size != 6:
             self.turns[self.agent_selection] += 1
 
-        self._calculate_rewards(
-            piece_size, territory_claimed, piece_removed_size
-        )  # Heuristic reward for current move
+        if self.per_move_rewards:
+            self._calculate_rewards(
+                piece_size, territory_claimed, piece_removed_size
+            )  # Heuristic reward for current move
         self._accumulate_rewards()
 
         # Calculate score heuristics every other turn (when both agents have placed the same number of pieces)
@@ -326,18 +351,24 @@ class raw_env(AECEnv):
             self.agent_selection = next_agent
 
         # If both agents have zero moves left (game over), calculate winners
-        elif len(self.legal_moves[self.agent_selection]) == 0:
-            self._calculate_winner()
-            self._calculate_score()  # Calculate score heuristics (even if one agent has played more turns)
-
-        # If the next agent has no legal moves left, current agent continues placing pieces
         else:
             self._calculate_legal_moves(self.agent_selection)
             if len(self.legal_moves[self.agent_selection]) == 0:
-                self.terminations[self.agent_selection] = True
+                self._calculate_score()  # Calculate score heuristics (even if one agent has played more turns)
+                self._calculate_winner()
+                # print("GAME OVER")
+                # return self._was_dead_step(action)
+
+            # If the next agent has no legal moves left, current agent continues placing pieces
+            else:
+                # print(f"{next_agent} out of moves, {self.agent_selection} continues placing")
+                if len(self.legal_moves[self.agent_selection]) == 0:
+                    self.terminations[self.agent_selection] = True
 
         if self.render_mode == "human":
             self.render()
+        # else:
+        # print(f"Cumulative rewards: {self._cumulative_rewards}, rewards: {self.rewards}")
 
     def reset(self, seed=None, return_info=False, options=None):
         # reset environment

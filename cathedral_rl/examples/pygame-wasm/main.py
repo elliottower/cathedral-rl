@@ -1,53 +1,26 @@
-import argparse
+import asyncio
+import sys
+import time
 
-import numpy as np
+sys.path.append("modules")
 
-from cathedral_rl import cathedral_v0
-from cathedral_rl.game.manual_policy import ManualPolicy
+import numpy as np  # noqa: E402
 
-
-def get_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--render-mode",
-        type=str,
-        default="human",
-        choices=["human", "rgb_array", "text", "text_full"],
-        help="Choose the rendering mode for the game.",
-    )
-
-    parser.add_argument(
-        "--seed", type=int, default=None, help="Set random seed for board and policy"
-    )
-    parser.add_argument(
-        "--player",
-        type=int,
-        default=0,
-        choices=[0, 1],
-        help="Choose which player to play as (player 0 places cathedral first, player 1 places their first pieces)",
-    )
-    return parser
+from cathedral_rl import cathedral_v0  # noqa: E402
+from cathedral_rl.game.manual_policy import ManualPolicy  # noqa: E402
 
 
-def get_args() -> argparse.Namespace:
-    parser = get_parser()
-    return parser.parse_known_args()[0]
-
-
-if __name__ == "__main__":
-    args = get_args()
-
+async def main():
     env = cathedral_v0.env(
-        render_mode=args.render_mode,
-        per_move_rewards=True,
-        final_reward_score_difference=True,
+        render_mode="human", per_move_rewards=True, final_reward_score_difference=True
     ).unwrapped
 
-    env.reset(args.seed)
+    seed = None
+    env.reset(seed)
     env.render()
 
-    env.action_space("player_0").seed(args.seed)
-    env.action_space("player_1").seed(args.seed)
+    env.action_space("player_0").seed(seed)
+    env.action_space("player_1").seed(seed)
 
     iter = 1
 
@@ -69,6 +42,7 @@ if __name__ == "__main__":
             action = manual_policy(observation, agent)
         else:
             action = env.action_space(agent).sample(mask=mask)
+            time.sleep(0.25)
 
         env.step(action)
 
@@ -108,3 +82,9 @@ if __name__ == "__main__":
             f"Remaining pieces difference: {env.score[agent]['remaining_pieces']}, "
             f"Territory difference: {env.score[agent]['territory']}"
         )
+
+    await asyncio.sleep(0)  # Very important, and keep it 0
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
