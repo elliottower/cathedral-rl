@@ -8,7 +8,6 @@ from .utils import GIFRecorder
 
 class ManualPolicy:
     def __init__(self, env, agent_id: int = 0, recorder: GIFRecorder = None):
-
         self.env = env
         self.agent_id = agent_id
         self.agent = self.env.agents[self.agent_id]
