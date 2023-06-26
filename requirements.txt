@@ -10,7 +10,7 @@ cachecontrol[filecache]==0.12.11 ; python_version >= "3.8" and python_version < 
 certifi==2022.12.7 ; python_version >= "3.8" and python_version < "3.12" \
     --hash=sha256:35824b4c3a97115964b408844d64aa14db1cc518f6562e8d7261699d1350a9e3 \
     --hash=sha256:4ad3232f5e926d6718ec31cfc1fcadfde020920e278684144551c91769c7bc18
-cffi==1.15.1 ; python_version >= "3.8" and python_version < "3.12" and sys_platform == "darwin" or python_version >= "3.8" and python_version < "3.12" and sys_platform == "linux" \
+cffi==1.15.1 ; python_version >= "3.8" and python_version < "3.12" and (sys_platform == "darwin" or sys_platform == "linux") \
     --hash=sha256:00a9ed42e88df81ffae7a8ab6d9356b371399b91dbdf0c3cb1e84c03a13aceb5 \
     --hash=sha256:03425bdae262c76aad70202debd780501fabeaca237cdfddc008987c0e0f59ef \
     --hash=sha256:04ed324bda3cda42b9b695d51bb7d54b680b9719cfab04227cdd1e04e5de3104 \
@@ -414,7 +414,7 @@ poetry==1.4.0 ; python_version >= "3.8" and python_version < "3.12" \
 ptyprocess==0.7.0 ; python_version >= "3.8" and python_version < "3.12" \
     --hash=sha256:4b41f3967fce3af57cc7e94b888626c18bf37a083e3651ca8feeb66d492fef35 \
     --hash=sha256:5c5d0a3b48ceee0b48485e0c26037c0acd7d29765ca3fbb5cb3831d347423220
-pycparser==2.21 ; python_version >= "3.8" and python_version < "3.12" and sys_platform == "darwin" or python_version >= "3.8" and python_version < "3.12" and sys_platform == "linux" \
+pycparser==2.21 ; python_version >= "3.8" and python_version < "3.12" and (sys_platform == "darwin" or sys_platform == "linux") \
     --hash=sha256:8ee45429555515e1f6b185e78100aea234072576aa43ab53aefcae078162fca9 \
     --hash=sha256:e644fdec12f7872f86c58ff790da456218b10f863970249516d60a5eaca77206
 pygame==2.2.0 ; python_version >= "3.8" and python_version < "3.12" \
