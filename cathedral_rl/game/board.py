@@ -133,7 +133,7 @@ class Board:
             placed_pieces.append((self.pieces[agent][14], agent, 14))
 
         # Look through opponent pieces (and the cathedral) and try removing them
-        for (piece, piece_agent, piece_idx) in placed_pieces:
+        for piece, piece_agent, piece_idx in placed_pieces:
             self.squares = squares_real.copy()  # Reset self.squares to original state
             for coord in piece.points:
                 self.squares.reshape(10, 10)[coord[0], coord[1]] = 0

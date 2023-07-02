@@ -104,7 +104,6 @@ class raw_env(AECEnv):
         per_move_rewards: Optional[bool] = False,
         final_reward_score_difference: Optional[bool] = False,
     ):
-
         super().__init__()
         self.screen = None
         self.render_mode = render_mode
@@ -316,7 +315,6 @@ class raw_env(AECEnv):
             self.truncations[self.agent_selection]
             or self.terminations[self.agent_selection]
         ):
-
             return self._was_dead_step(action)
 
         # Check that it is a valid move
